@@ -1,0 +1,12 @@
+{
+  "name": "floorplan-assistant",
+  "version": "1.0.0",
+  "description": "Floorplan Assistant app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0"
+  }
+}
