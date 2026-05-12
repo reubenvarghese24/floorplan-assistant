@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Floorplan Assistant</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="app-header">
+    <h1 class="app-title">Floorplan Assistant</h1>
+    <button id="toggle-units" class="btn btn--secondary">Switch to cm</button>
+  </header>
+
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="home">Home</button>
+    <button class="tab-btn" data-tab="inventory">Inventory</button>
+    <button class="tab-btn" data-tab="rooms">Rooms</button>
+    <button class="tab-btn" data-tab="floorplan">Floor Plan</button>
+  </nav>
+
+  <main class="app-main">
+
+    <!-- Home Tab -->
+    <section id="tab-home" class="tab-panel active">
+      <div class="hero hero--tab">
+        <div class="hero-inner">
+          <p class="hero-eyebrow">Free · No account required</p>
+          <h1 class="hero-title">Build your dream floorplan.</h1>
+          <p class="hero-desc">Plan your space before moving day. Add your furniture, map out your rooms, and drag everything into place — all in your browser.</p>
+          <button class="btn btn--hero" id="home-get-started">Get Started →</button>
+        </div>
+      </div>
+      <div class="steps-section steps-section--tab">
+        <div class="steps-inner">
+          <h2 class="steps-heading">How it works</h2>
+          <div class="steps-grid">
+            <div class="step-card">
+              <div class="step-number">1</div>
+              <h3 class="step-title">Build Your Inventory</h3>
+              <p class="step-desc">Add all your furniture pieces with their real dimensions — sofas, beds, desks, shelves, and more. Enter width, depth, and height so every piece is sized accurately.</p>
+            </div>
+            <div class="step-card">
+              <div class="step-number">2</div>
+              <h3 class="step-title">Define Your Rooms</h3>
+              <p class="step-desc">Set up each room with its exact measurements in feet. Mark where the doors and windows are so your layout stays realistic from the start.</p>
+            </div>
+            <div class="step-card">
+              <div class="step-number">3</div>
+              <h3 class="step-title">Design Your Layout</h3>
+              <p class="step-desc">Drag furniture from your inventory onto the floor plan canvas. Rotate pieces, rearrange them freely, and save the layout that works best for you.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Inventory Tab -->
+    <section id="tab-inventory" class="tab-panel">
+      <div class="panel-header">
+        <h2>Furniture Inventory</h2>
+        <button id="open-add-furniture" class="btn btn--primary">+ Add Item</button>
+      </div>
+      <p class="panel-desc">Add all your furniture pieces with their real dimensions — sofas, beds, desks, shelves, and more. Enter width, depth, and height so every piece is sized accurately.</p>
+
+      <div id="furniture-modal" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-box">
+          <h3 id="furniture-modal-title">Add Furniture</h3>
+          <form id="furniture-form" novalidate>
+            <input type="hidden" id="furniture-id">
+
+            <div class="form-row">
+              <label for="f-name">Name <span class="required">*</span></label>
+              <input type="text" id="f-name" placeholder="e.g. IKEA Kallax" autocomplete="off">
+              <span class="field-error" id="f-name-error"></span>
+            </div>
+
+            <div class="form-row">
+              <label for="f-category">Category <span class="required">*</span></label>
+              <select id="f-category">
+                <option value="">Select category…</option>
+                <option value="sofa">Sofa</option>
+                <option value="bed">Bed</option>
+                <option value="table">Table</option>
+                <option value="chair">Chair</option>
+                <option value="desk">Desk</option>
+                <option value="dresser">Dresser</option>
+                <option value="shelf">Shelf</option>
+                <option value="other">Other</option>
+              </select>
+              <span class="field-error" id="f-category-error"></span>
+            </div>
+
+            <div class="form-row">
+              <label>Dimensions <span class="required">*</span> <span class="unit-label" id="f-unit-label">(inches)</span></label>
+              <div class="dim-row">
+                <div class="dim-field">
+                  <input type="number" id="f-width" min="0.1" step="0.1" placeholder="Width">
+                </div>
+                <span class="dim-sep">×</span>
+                <div class="dim-field">
+                  <input type="number" id="f-depth" min="0.1" step="0.1" placeholder="Depth">
+                </div>
+                <span class="dim-sep">×</span>
+                <div class="dim-field">
+                  <input type="number" id="f-height" min="0.1" step="0.1" placeholder="Height">
+                </div>
+              </div>
+              <span class="field-error" id="f-dims-error"></span>
+            </div>
+
+            <div class="form-row">
+              <label for="f-weight">Weight (lbs) <span class="optional">optional</span></label>
+              <input type="number" id="f-weight" min="0" step="0.1" placeholder="e.g. 45">
+            </div>
+
+            <div class="form-row">
+              <label for="f-notes">Notes <span class="optional">optional</span></label>
+              <textarea id="f-notes" rows="2" placeholder="Assembly notes, fragile, disassembly needed…"></textarea>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" id="furniture-cancel" class="btn btn--secondary">Cancel</button>
+              <button type="submit" class="btn btn--primary">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div id="furniture-empty" class="empty-state hidden">
+        <p>No furniture yet. Click <strong>+ Add Item</strong> to get started.</p>
+      </div>
+      <div id="furniture-grid" class="card-grid"></div>
+    </section>
+
+    <!-- Rooms Tab -->
+    <section id="tab-rooms" class="tab-panel">
+      <div class="panel-header">
+        <h2>Rooms</h2>
+        <button id="open-add-room" class="btn btn--primary">+ Add Room</button>
+      </div>
+      <p class="panel-desc">Set up each room with its exact measurements in feet. Mark where the doors and windows are so your layout stays realistic from the start.</p>
+
+      <div id="room-modal" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-box">
+          <h3 id="room-modal-title">Add Room</h3>
+          <form id="room-form" novalidate>
+            <input type="hidden" id="room-id">
+
+            <div class="form-row">
+              <label for="r-name">Room Name <span class="required">*</span></label>
+              <input type="text" id="r-name" placeholder="e.g. Living Room" autocomplete="off">
+              <span class="field-error" id="r-name-error"></span>
+            </div>
+
+            <div class="form-row">
+              <label>Dimensions (feet) <span class="required">*</span></label>
+              <div class="dim-row">
+                <div class="dim-field">
+                  <input type="number" id="r-width" min="1" step="0.5" placeholder="Width">
+                </div>
+                <span class="dim-sep">×</span>
+                <div class="dim-field">
+                  <input type="number" id="r-depth" min="1" step="0.5" placeholder="Depth">
+                </div>
+                <span class="dim-unit">ft</span>
+              </div>
+              <span class="field-error" id="r-dims-error"></span>
+            </div>
+
+            <div class="wall-features-section">
+              <div class="section-subheader">
+                <h4>Wall Features</h4>
+                <button type="button" id="add-wall-feature" class="btn btn--secondary btn--sm">+ Add Door/Window</button>
+              </div>
+              <div id="wall-features-list"></div>
+              <p id="wall-features-empty" class="wall-features-hint">No doors or windows added yet.</p>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" id="room-cancel" class="btn btn--secondary">Cancel</button>
+              <button type="submit" class="btn btn--primary">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div id="rooms-empty" class="empty-state hidden">
+        <p>No rooms yet. Click <strong>+ Add Room</strong> to get started.</p>
+      </div>
+      <div id="rooms-grid" class="card-grid"></div>
+    </section>
+
+    <!-- Floor Plan Tab -->
+    <section id="tab-floorplan" class="tab-panel">
+      <div class="panel-header">
+        <h2>Floor Plan</h2>
+        <select id="fp-room-select" class="fp-room-select">
+          <option value="">Select a room…</option>
+        </select>
+      </div>
+      <p class="panel-desc">Drag furniture from your inventory onto the floor plan canvas. Rotate pieces, rearrange them freely, and save the layout that works best for you.</p>
+
+      <div id="fp-workspace" class="floorplan-workspace hidden">
+        <div class="floorplan-sidebar" id="fp-sidebar"></div>
+        <div class="floorplan-canvas-wrap">
+          <canvas id="floor-canvas" width="700" height="500"></canvas>
+          <div class="canvas-toolbar">
+            <button id="fp-rotate" class="btn btn--secondary btn--sm" disabled>↻ Rotate (R)</button>
+            <button id="fp-clear"  class="btn btn--secondary btn--sm">Clear All</button>
+            <button id="fp-save"   class="btn btn--primary   btn--sm">Save Layout</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="fp-empty" class="empty-state">
+        <p>Select a room above to start placing furniture.</p>
+      </div>
+
+      <div class="floorplan-legend" id="fp-legend">
+        <span class="legend-item"><span class="legend-dot legend-dot--selected"></span> Selected</span>
+        <span class="legend-item"><span class="legend-dot legend-dot--collision"></span> Overlap</span>
+        <span class="legend-item"><span class="legend-dot legend-dot--blocking"></span> Blocking doorway</span>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

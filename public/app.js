@@ -166,6 +166,50 @@
     return Promise.resolve({ id });
   }
 
+  function seedDefaultData() {
+    if (localStorage.getItem(LS_FURNITURE) !== null) return;
+
+    const now = new Date().toISOString();
+    const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+
+    const furniture = [
+      { id: id(), name: 'KIVIK Sofa',        category: 'sofa',    width: 90,  depth: 37, height: 33, unit: 'in', weight: 132, notes: 'IKEA 3-seat sofa',          createdAt: now, updatedAt: now },
+      { id: id(), name: 'MALM Bed Frame',     category: 'bed',     width: 64,  depth: 84, height: 15, unit: 'in', weight: 176, notes: 'IKEA queen bed frame',       createdAt: now, updatedAt: now },
+      { id: id(), name: 'HEMNES Coffee Table',category: 'table',   width: 46,  depth: 22, height: 18, unit: 'in', weight: 44,  notes: 'IKEA rectangular table',    createdAt: now, updatedAt: now },
+      { id: id(), name: 'KALLAX Bookshelf',   category: 'shelf',   width: 57,  depth: 15, height: 30, unit: 'in', weight: 97,  notes: 'IKEA 4×2 shelf unit',       createdAt: now, updatedAt: now },
+    ];
+
+    const rooms = [
+      {
+        id: id(), name: 'Living Room', width: 16, depth: 14, layout: [],
+        wallFeatures: [
+          { id: id(), type: 'door',   wall: 'S', offset: 2, width: 3, label: 'Main door' },
+          { id: id(), type: 'window', wall: 'N', offset: 4, width: 5, label: 'Front window' },
+        ],
+        createdAt: now, updatedAt: now,
+      },
+      {
+        id: id(), name: 'Bedroom', width: 12, depth: 11, layout: [],
+        wallFeatures: [
+          { id: id(), type: 'door',   wall: 'W', offset: 1, width: 3, label: 'Entry door' },
+          { id: id(), type: 'window', wall: 'N', offset: 3, width: 4, label: 'Window' },
+        ],
+        createdAt: now, updatedAt: now,
+      },
+      {
+        id: id(), name: 'Kitchen', width: 10, depth: 8, layout: [],
+        wallFeatures: [
+          { id: id(), type: 'door',   wall: 'E', offset: 1, width: 3, label: 'Kitchen door' },
+          { id: id(), type: 'window', wall: 'S', offset: 2, width: 3, label: 'Kitchen window' },
+        ],
+        createdAt: now, updatedAt: now,
+      },
+    ];
+
+    lsSet(LS_FURNITURE, furniture);
+    lsSet(LS_ROOMS, rooms);
+  }
+
   // ─── Unit Utilities ─────────────────────────────────────────────────────────
 
   function convertDimension(value, fromUnit, toUnit) {
@@ -235,15 +279,22 @@
 
   // ─── Tab Navigation ────────────────────────────────────────────────────────
 
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    if (btn) btn.classList.add('active');
+    const panel = el('tab-' + tabName);
+    if (panel) panel.classList.add('active');
+  }
+
   function initTabs() {
     document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        el('tab-' + btn.dataset.tab).classList.add('active');
-      });
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
+    el('home-get-started').addEventListener('click', () => switchTab('inventory'));
+    const hash = window.location.hash.slice(1);
+    if (hash && document.querySelector(`.tab-btn[data-tab="${hash}"]`)) switchTab(hash);
   }
 
   // ─── Furniture UI ──────────────────────────────────────────────────────────
@@ -1152,13 +1203,15 @@
       }
     });
 
+    seedDefaultData();
+
     // Load initial data in parallel
     try {
       const [fData, rData] = await Promise.all([getFurniture(), getRooms()]);
       State.furniture = fData.items;
       State.rooms     = rData.items;
     } catch (err) {
-      alert('Failed to load data from server: ' + err.message);
+      alert('Failed to load data: ' + err.message);
     }
 
     renderFurnitureGrid();

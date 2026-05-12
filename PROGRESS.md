@@ -1,5 +1,19 @@
 # Floorplan Assistant — Progress Log
 
+## [2026-05-11] — 4
+
+### Added: Landing Page
+Built a landing page at `/` that introduces the app before users enter it.
+
+**What was built:**
+- New `public/index.html` — landing page with hero section, 3-step how-it-works guide, and footer
+- `public/app.html` — the full app (renamed from `index.html`)
+- ~120 lines of new CSS in `style.css` for landing-specific layouts
+
+**Structure:** Blue hero with tagline "Build your dream floorplan", 3 step cards (Inventory → Rooms → Floor Plan), CTA button linking to `/app.html`. Reuses the existing design system (same colors, fonts, shadows, button styles).
+
+---
+
 ## [2026-05-11] — 3
 
 ### Development: Moved to localStorage + Vercel-ready
