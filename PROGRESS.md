@@ -1,5 +1,36 @@
 # Floorplan Assistant — Progress Log
 
+## [2026-05-11] — 8
+
+### Added: Edge Snapping
+Furniture pieces now snap flush when dragged within 6 inches of another piece's edge. Works on both X and Y axes independently — sliding along a snapped edge doesn't cause unwanted jumps. Snapped positions are re-clamped to room boundaries so pieces can't snap outside the room.
+
+---
+
+## [2026-05-11] — 7
+
+### Deployed: App live on Vercel
+Pushed to GitHub and deployed via Vercel. Tested with a real user — working.
+
+---
+
+## [2026-05-11] — 6
+
+### Added: Default Starter Data
+New users now land on a pre-populated app — 4 IKEA-inspired furniture items (KIVIK Sofa, MALM Bed, HEMNES Coffee Table, KALLAX Bookshelf) and 3 rooms (Living Room, Bedroom, Kitchen), each with a door and window. Seeding only runs once; existing user data is never overwritten.
+
+---
+
+## [2026-05-11] — 5
+
+### Updated: Landing Page + Home Tab
+- Removed emojis from landing page step cards
+- Added "Home" as the first tab in the app, embedding the landing page content
+- "Get Started" button in Home tab and on the external landing page both route to the Inventory tab
+- Tab descriptions updated to match the step card copy
+
+---
+
 ## [2026-05-11] — 4
 
 ### Added: Landing Page

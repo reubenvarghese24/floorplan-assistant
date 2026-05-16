@@ -945,6 +945,22 @@
     return null;
   }
 
+  function applyEdgeSnap(p, rW, rD) {
+    const SNAP = 0.5;
+    let x = p.x, y = p.y;
+    for (const q of State.floorplan.placements) {
+      if (q.id === p.id) continue;
+      const qf = State.furniture.find(i => i.id === q.furnitureId);
+      if (!qf) continue;
+      const [qW, qD] = rotatedDims(qf, q.rotation);
+      if (Math.abs((x + rW) - q.x)        < SNAP) x = q.x - rW;
+      if (Math.abs(x        - (q.x + qW)) < SNAP) x = q.x + qW;
+      if (Math.abs((y + rD) - q.y)        < SNAP) y = q.y - rD;
+      if (Math.abs(y        - (q.y + qD)) < SNAP) y = q.y + qD;
+    }
+    return [x, y];
+  }
+
   function checkCollisions() {
     const colliding = new Set();
     const boxes = State.floorplan.placements.map(p => {
@@ -1146,6 +1162,9 @@
 
       p.x = Math.max(0, Math.min(room.width  - rW, (cx - CANVAS_PAD) / scale - offsetX));
       p.y = Math.max(0, Math.min(room.depth - rD,  (cy - CANVAS_PAD) / scale - offsetY));
+      const [sx, sy] = applyEdgeSnap(p, rW, rD);
+      p.x = Math.max(0, Math.min(room.width  - rW, sx));
+      p.y = Math.max(0, Math.min(room.depth - rD,  sy));
       drawCanvas();
     });
 

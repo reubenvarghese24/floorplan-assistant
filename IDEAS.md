@@ -3,6 +3,7 @@
 ## New Features
 
 - [2026-05-07] Use AI in the background to suggest layouts that align with feng shui principles once the user inputs all their info
+- [2026-05-11] Add snap to fit between two items — edges should snap together when dragging pieces close to each other
 
 ## New Developments
 
