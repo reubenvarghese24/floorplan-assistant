@@ -21,11 +21,14 @@
     editingFurnitureId: null,
     editingRoomId: null,
     floorplan: {
-      roomId:     null,
-      placements: [],
-      selectedId: null,
-      dragging:   null,   // { id, offsetX(ft), offsetY(ft) }
-      scale:      1,
+      roomId:          null,
+      placements:      [],
+      selectedId:      null,
+      dragging:        null,   // { id, offsetX(ft), offsetY(ft) }
+      scale:           1,
+      activeLayoutId:  null,
+      image:           null,   // HTMLImageElement or null
+      imageOpacity:    0.3,
     },
   };
 
@@ -122,7 +125,7 @@
         width: Number(wf.width),
         label: wf.label ? wf.label.trim() : null,
       })),
-      layout: [],
+      layouts: [{ id: genId(), name: 'Layout 1', placements: [], createdAt: now, updatedAt: now }],
       createdAt: now,
       updatedAt: now,
     };
@@ -149,7 +152,8 @@
         width: Number(wf.width),
         label: wf.label ? wf.label.trim() : null,
       })),
-      layout: Array.isArray(input.layout) ? input.layout : existing.layout,
+      layouts: Array.isArray(input.layouts) ? input.layouts : (existing.layouts || []),
+      layout:  undefined,
       updatedAt: new Date().toISOString(),
     };
     items[idx] = item;
@@ -163,7 +167,31 @@
     if (idx === -1) return Promise.reject(new Error('Not found'));
     items.splice(idx, 1);
     lsSet(LS_ROOMS, items);
+    clearRoomImage(id);
     return Promise.resolve({ id });
+  }
+
+  // ─── Room Image Storage ────────────────────────────────────────────────────
+
+  const LS_ROOM_IMAGES = 'ma_room_images';
+
+  function getRoomImage(roomId) {
+    try {
+      const map = JSON.parse(localStorage.getItem(LS_ROOM_IMAGES)) || {};
+      return map[roomId] || null;
+    } catch { return null; }
+  }
+
+  function setRoomImage(roomId, dataUrl) {
+    const map = JSON.parse(localStorage.getItem(LS_ROOM_IMAGES)) || {};
+    map[roomId] = dataUrl;
+    localStorage.setItem(LS_ROOM_IMAGES, JSON.stringify(map));
+  }
+
+  function clearRoomImage(roomId) {
+    const map = JSON.parse(localStorage.getItem(LS_ROOM_IMAGES)) || {};
+    delete map[roomId];
+    localStorage.setItem(LS_ROOM_IMAGES, JSON.stringify(map));
   }
 
   function seedDefaultData() {
@@ -181,7 +209,8 @@
 
     const rooms = [
       {
-        id: id(), name: 'Living Room', width: 16, depth: 14, layout: [],
+        id: id(), name: 'Living Room', width: 16, depth: 14,
+        layouts: [{ id: id(), name: 'Layout 1', placements: [], createdAt: now, updatedAt: now }],
         wallFeatures: [
           { id: id(), type: 'door',   wall: 'S', offset: 2, width: 3, label: 'Main door' },
           { id: id(), type: 'window', wall: 'N', offset: 4, width: 5, label: 'Front window' },
@@ -189,7 +218,8 @@
         createdAt: now, updatedAt: now,
       },
       {
-        id: id(), name: 'Bedroom', width: 12, depth: 11, layout: [],
+        id: id(), name: 'Bedroom', width: 12, depth: 11,
+        layouts: [{ id: id(), name: 'Layout 1', placements: [], createdAt: now, updatedAt: now }],
         wallFeatures: [
           { id: id(), type: 'door',   wall: 'W', offset: 1, width: 3, label: 'Entry door' },
           { id: id(), type: 'window', wall: 'N', offset: 3, width: 4, label: 'Window' },
@@ -197,7 +227,8 @@
         createdAt: now, updatedAt: now,
       },
       {
-        id: id(), name: 'Kitchen', width: 10, depth: 8, layout: [],
+        id: id(), name: 'Kitchen', width: 10, depth: 8,
+        layouts: [{ id: id(), name: 'Layout 1', placements: [], createdAt: now, updatedAt: now }],
         wallFeatures: [
           { id: id(), type: 'door',   wall: 'E', offset: 1, width: 3, label: 'Kitchen door' },
           { id: id(), type: 'window', wall: 'S', offset: 2, width: 3, label: 'Kitchen window' },
@@ -671,6 +702,35 @@
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
   }
 
+  function ensureLayouts(room) {
+    if (Array.isArray(room.layouts) && room.layouts.length > 0) return room;
+    const now = room.updatedAt || new Date().toISOString();
+    return {
+      ...room,
+      layouts: [{ id: genId(), name: 'Layout 1', placements: room.layout || [], createdAt: now, updatedAt: now }],
+    };
+  }
+
+  function updateImageBar(hasImage) {
+    el('fp-image-controls').classList.toggle('hidden', !hasImage);
+  }
+
+  function loadRoomImage(roomId) {
+    const dataUrl = getRoomImage(roomId);
+    if (!dataUrl) {
+      State.floorplan.image = null;
+      updateImageBar(false);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      State.floorplan.image = img;
+      updateImageBar(true);
+      drawCanvas();
+    };
+    img.src = dataUrl;
+  }
+
   function rotatedDims(f, rotation) {
     const wIn = convertDimension(f.width, f.unit, 'in');
     const dIn = convertDimension(f.depth, f.unit, 'in');
@@ -700,10 +760,20 @@
     State.floorplan.selectedId = null;
     State.floorplan.dragging   = null;
 
-    const room = fpRoom();
+    let room = fpRoom();
     if (!room) return;
 
-    State.floorplan.placements = (room.layout || []).map(p => ({ ...p }));
+    // Migrate rooms that only have the old single `layout` field
+    if (!Array.isArray(room.layouts) || room.layouts.length === 0) {
+      const migrated = ensureLayouts(room);
+      const idx = State.rooms.findIndex(r => r.id === roomId);
+      if (idx !== -1) State.rooms[idx] = migrated;
+      room = migrated;
+    }
+
+    const firstLayout = room.layouts[0];
+    State.floorplan.activeLayoutId = firstLayout.id;
+    State.floorplan.placements     = (firstLayout.placements || []).map(p => ({ ...p }));
 
     const canvas = el('floor-canvas');
     const scale  = (CANVAS_W - 2 * CANVAS_PAD) / room.width;
@@ -711,7 +781,9 @@
     canvas.width           = CANVAS_W;
     canvas.height          = Math.round(room.depth * scale + 2 * CANVAS_PAD);
 
+    renderLayoutSwitcher();
     renderFpSidebar();
+    loadRoomImage(roomId);
     drawCanvas();
 
     el('fp-workspace').classList.remove('hidden');
@@ -771,6 +843,13 @@
     const oy    = CANVAS_PAD;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Floor plan reference image
+    if (State.floorplan.image) {
+      ctx.globalAlpha = State.floorplan.imageOpacity;
+      ctx.drawImage(State.floorplan.image, ox, oy, rW, rH);
+      ctx.globalAlpha = 1;
+    }
 
     // Grid lines
     ctx.strokeStyle = '#e8eaed';
@@ -1035,17 +1114,130 @@
   async function saveLayout() {
     const room = fpRoom();
     if (!room) return;
+    const now = new Date().toISOString();
+    const updatedLayouts = room.layouts.map(l =>
+      l.id === State.floorplan.activeLayoutId
+        ? { ...l, placements: State.floorplan.placements, updatedAt: now }
+        : l
+    );
     try {
       const res = await updateRoom(room.id, {
         name:         room.name,
         width:        room.width,
         depth:        room.depth,
         wallFeatures: room.wallFeatures,
-        layout:       State.floorplan.placements,
+        layouts:      updatedLayouts,
       });
       const idx = State.rooms.findIndex(r => r.id === room.id);
       if (idx !== -1) State.rooms[idx] = res.item;
       showToast('Layout saved!');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  function renderLayoutSwitcher() {
+    const room = fpRoom();
+    const bar = el('fp-layout-bar');
+    bar.innerHTML = '';
+    if (!room || !room.layouts) return;
+
+    room.layouts.forEach(layout => {
+      const btn = document.createElement('button');
+      btn.className = 'layout-tab btn btn--secondary btn--sm' + (layout.id === State.floorplan.activeLayoutId ? ' active' : '');
+      btn.dataset.layoutId = layout.id;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = layout.name;
+      btn.appendChild(nameSpan);
+
+      const del = document.createElement('span');
+      del.className = 'del-layout';
+      del.title = 'Delete layout';
+      del.textContent = '×';
+      del.dataset.layoutId = layout.id;
+      btn.appendChild(del);
+
+      bar.appendChild(btn);
+    });
+
+    const newBtn = document.createElement('button');
+    newBtn.className = 'btn btn--secondary btn--sm';
+    newBtn.textContent = '+ New Layout';
+    newBtn.addEventListener('click', newLayout);
+    bar.appendChild(newBtn);
+
+    bar.querySelectorAll('.layout-tab').forEach(btn => {
+      btn.addEventListener('click', e => {
+        if (e.target.classList.contains('del-layout')) return;
+        selectLayout(btn.dataset.layoutId);
+      });
+    });
+    bar.querySelectorAll('.del-layout').forEach(del => {
+      del.addEventListener('click', e => {
+        e.stopPropagation();
+        deleteLayout(del.dataset.layoutId);
+      });
+    });
+  }
+
+  function selectLayout(layoutId) {
+    const room = fpRoom();
+    if (!room) return;
+    const layout = room.layouts.find(l => l.id === layoutId);
+    if (!layout) return;
+    State.floorplan.activeLayoutId = layoutId;
+    State.floorplan.placements = (layout.placements || []).map(p => ({ ...p }));
+    State.floorplan.selectedId = null;
+    el('fp-rotate').disabled = true;
+    renderLayoutSwitcher();
+    drawCanvas();
+  }
+
+  async function newLayout() {
+    const room = fpRoom();
+    if (!room) return;
+    const name = `Layout ${room.layouts.length + 1}`;
+    const now = new Date().toISOString();
+    const layout = { id: genId(), name, placements: [], createdAt: now, updatedAt: now };
+    const newLayouts = [...room.layouts, layout];
+    try {
+      const res = await updateRoom(room.id, {
+        name:         room.name,
+        width:        room.width,
+        depth:        room.depth,
+        wallFeatures: room.wallFeatures,
+        layouts:      newLayouts,
+      });
+      const idx = State.rooms.findIndex(r => r.id === room.id);
+      if (idx !== -1) State.rooms[idx] = res.item;
+      selectLayout(layout.id);
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function deleteLayout(layoutId) {
+    const room = fpRoom();
+    if (!room) return;
+    if (room.layouts.length <= 1) {
+      showToast("Can't delete the only layout");
+      return;
+    }
+    const target = room.layouts.find(l => l.id === layoutId);
+    if (!confirm(`Delete "${target?.name}"?`)) return;
+    const remaining = room.layouts.filter(l => l.id !== layoutId);
+    try {
+      const res = await updateRoom(room.id, {
+        name:         room.name,
+        width:        room.width,
+        depth:        room.depth,
+        wallFeatures: room.wallFeatures,
+        layouts:      remaining,
+      });
+      const idx = State.rooms.findIndex(r => r.id === room.id);
+      if (idx !== -1) State.rooms[idx] = res.item;
+      selectLayout(remaining[0].id);
     } catch (err) {
       showToast(err.message, true);
     }
@@ -1061,7 +1253,10 @@
       } else {
         el('fp-workspace').classList.add('hidden');
         el('fp-empty').classList.remove('hidden');
-        State.floorplan.roomId = null;
+        State.floorplan.roomId         = null;
+        State.floorplan.activeLayoutId = null;
+        State.floorplan.image          = null;
+        updateImageBar(false);
       }
     });
 
@@ -1176,6 +1371,35 @@
     canvas.addEventListener('mouseleave', () => {
       State.floorplan.dragging = null;
       canvas.style.cursor = 'default';
+    });
+
+    // Floor plan image upload
+    el('fp-upload-image').addEventListener('click', () => el('fp-image-input').click());
+
+    el('fp-image-input').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file || !State.floorplan.roomId) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const dataUrl = ev.target.result;
+        setRoomImage(State.floorplan.roomId, dataUrl);
+        loadRoomImage(State.floorplan.roomId);
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    });
+
+    el('fp-image-opacity').addEventListener('input', e => {
+      State.floorplan.imageOpacity = Number(e.target.value) / 100;
+      drawCanvas();
+    });
+
+    el('fp-remove-image').addEventListener('click', () => {
+      if (!State.floorplan.roomId) return;
+      clearRoomImage(State.floorplan.roomId);
+      State.floorplan.image = null;
+      updateImageBar(false);
+      drawCanvas();
     });
   }
 
