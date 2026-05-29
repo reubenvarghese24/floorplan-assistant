@@ -27,8 +27,7 @@
       dragging:        null,   // { id, offsetX(ft), offsetY(ft) }
       scale:           1,
       activeLayoutId:  null,
-      image:           null,   // HTMLImageElement or null
-      imageOpacity:    0.3,
+      hoveredId:       null,
     },
   };
 
@@ -167,31 +166,7 @@
     if (idx === -1) return Promise.reject(new Error('Not found'));
     items.splice(idx, 1);
     lsSet(LS_ROOMS, items);
-    clearRoomImage(id);
     return Promise.resolve({ id });
-  }
-
-  // ─── Room Image Storage ────────────────────────────────────────────────────
-
-  const LS_ROOM_IMAGES = 'ma_room_images';
-
-  function getRoomImage(roomId) {
-    try {
-      const map = JSON.parse(localStorage.getItem(LS_ROOM_IMAGES)) || {};
-      return map[roomId] || null;
-    } catch { return null; }
-  }
-
-  function setRoomImage(roomId, dataUrl) {
-    const map = JSON.parse(localStorage.getItem(LS_ROOM_IMAGES)) || {};
-    map[roomId] = dataUrl;
-    localStorage.setItem(LS_ROOM_IMAGES, JSON.stringify(map));
-  }
-
-  function clearRoomImage(roomId) {
-    const map = JSON.parse(localStorage.getItem(LS_ROOM_IMAGES)) || {};
-    delete map[roomId];
-    localStorage.setItem(LS_ROOM_IMAGES, JSON.stringify(map));
   }
 
   function seedDefaultData() {
@@ -711,26 +686,6 @@
     };
   }
 
-  function updateImageBar(hasImage) {
-    el('fp-image-controls').classList.toggle('hidden', !hasImage);
-  }
-
-  function loadRoomImage(roomId) {
-    const dataUrl = getRoomImage(roomId);
-    if (!dataUrl) {
-      State.floorplan.image = null;
-      updateImageBar(false);
-      return;
-    }
-    const img = new Image();
-    img.onload = () => {
-      State.floorplan.image = img;
-      updateImageBar(true);
-      drawCanvas();
-    };
-    img.src = dataUrl;
-  }
-
   function rotatedDims(f, rotation) {
     const wIn = convertDimension(f.width, f.unit, 'in');
     const dIn = convertDimension(f.depth, f.unit, 'in');
@@ -783,7 +738,6 @@
 
     renderLayoutSwitcher();
     renderFpSidebar();
-    loadRoomImage(roomId);
     drawCanvas();
 
     el('fp-workspace').classList.remove('hidden');
@@ -844,13 +798,6 @@
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Floor plan reference image
-    if (State.floorplan.image) {
-      ctx.globalAlpha = State.floorplan.imageOpacity;
-      ctx.drawImage(State.floorplan.image, ox, oy, rW, rH);
-      ctx.globalAlpha = 1;
-    }
-
     // Grid lines
     ctx.strokeStyle = '#e8eaed';
     ctx.lineWidth   = 0.5;
@@ -879,11 +826,13 @@
     const collisions = checkCollisions();
     const blockings  = checkDoorwayBlocking();
 
+    const notDragging = !State.floorplan.dragging;
     State.floorplan.placements.forEach(p => {
       if (p.id === State.floorplan.selectedId) return; // draw selected last
       const f = State.furniture.find(i => i.id === p.furnitureId);
       if (f) drawPlacement(ctx, p, f, scale, ox, oy, {
         isSelected:  false,
+        isHovered:   notDragging && p.id === State.floorplan.hoveredId,
         isColliding: collisions.has(p.id),
         isBlocking:  blockings.has(p.id),
       });
@@ -896,6 +845,7 @@
         const f = State.furniture.find(i => i.id === p.furnitureId);
         if (f) drawPlacement(ctx, p, f, scale, ox, oy, {
           isSelected:  true,
+          isHovered:   notDragging && p.id === State.floorplan.hoveredId,
           isColliding: collisions.has(p.id),
           isBlocking:  blockings.has(p.id),
         });
@@ -1005,6 +955,20 @@
       ctx.arc(px + pw / 2, py - 5, 4, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    // Trash icon on hovered piece
+    if (flags.isHovered) {
+      const { x: ix, y: iy, r } = trashIconHitArea(p, f);
+      ctx.fillStyle = 'rgba(220,38,38,0.90)';
+      ctx.beginPath();
+      ctx.arc(ix, iy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('✕', ix, iy);
+    }
   }
 
   function hitTest(cx, cy) {
@@ -1022,6 +986,15 @@
       }
     }
     return null;
+  }
+
+  function trashIconHitArea(p, f) {
+    const [rW] = rotatedDims(f, p.rotation);
+    const scale = State.floorplan.scale;
+    const px = p.x * scale + CANVAS_PAD;
+    const py = p.y * scale + CANVAS_PAD;
+    const pw = rW * scale;
+    return { x: px + pw - 10, y: py + 10, r: 9 };
   }
 
   function applyEdgeSnap(p, rW, rD) {
@@ -1255,8 +1228,6 @@
         el('fp-empty').classList.remove('hidden');
         State.floorplan.roomId         = null;
         State.floorplan.activeLayoutId = null;
-        State.floorplan.image          = null;
-        updateImageBar(false);
       }
     });
 
@@ -1325,6 +1296,23 @@
       const cy     = (e.clientY - rect.top)  * scaleY;
       const hitId = hitTest(cx, cy);
 
+      // Check if click landed on the trash icon
+      if (hitId) {
+        const p = State.floorplan.placements.find(pl => pl.id === hitId);
+        const f = State.furniture.find(i => i.id === p.furnitureId);
+        const { x, y, r } = trashIconHitArea(p, f);
+        if (Math.hypot(cx - x, cy - y) <= r) {
+          State.floorplan.placements = State.floorplan.placements.filter(pl => pl.id !== hitId);
+          if (State.floorplan.selectedId === hitId) {
+            State.floorplan.selectedId = null;
+            el('fp-rotate').disabled = true;
+          }
+          State.floorplan.hoveredId = null;
+          drawCanvas();
+          return;
+        }
+      }
+
       State.floorplan.selectedId = hitId;
       el('fp-rotate').disabled = !hitId;
 
@@ -1342,25 +1330,43 @@
     });
 
     canvas.addEventListener('mousemove', e => {
-      if (!State.floorplan.dragging) return;
-      const { id, offsetX, offsetY } = State.floorplan.dragging;
       const rect   = canvas.getBoundingClientRect();
       const scaleX = canvas.width  / rect.width;
       const scaleY = canvas.height / rect.height;
       const cx     = (e.clientX - rect.left) * scaleX;
       const cy     = (e.clientY - rect.top)  * scaleY;
-      const scale = State.floorplan.scale;
-      const room  = fpRoom();
-      const p     = State.floorplan.placements.find(pl => pl.id === id);
-      const f     = State.furniture.find(i => i.id === p.furnitureId);
-      const [rW, rD] = rotatedDims(f, p.rotation);
 
-      p.x = Math.max(0, Math.min(room.width  - rW, (cx - CANVAS_PAD) / scale - offsetX));
-      p.y = Math.max(0, Math.min(room.depth - rD,  (cy - CANVAS_PAD) / scale - offsetY));
-      const [sx, sy] = applyEdgeSnap(p, rW, rD);
-      p.x = Math.max(0, Math.min(room.width  - rW, sx));
-      p.y = Math.max(0, Math.min(room.depth - rD,  sy));
-      drawCanvas();
+      if (State.floorplan.dragging) {
+        const { id, offsetX, offsetY } = State.floorplan.dragging;
+        const scale = State.floorplan.scale;
+        const room  = fpRoom();
+        const p     = State.floorplan.placements.find(pl => pl.id === id);
+        const f     = State.furniture.find(i => i.id === p.furnitureId);
+        const [rW, rD] = rotatedDims(f, p.rotation);
+
+        p.x = Math.max(0, Math.min(room.width  - rW, (cx - CANVAS_PAD) / scale - offsetX));
+        p.y = Math.max(0, Math.min(room.depth - rD,  (cy - CANVAS_PAD) / scale - offsetY));
+        const [sx, sy] = applyEdgeSnap(p, rW, rD);
+        p.x = Math.max(0, Math.min(room.width  - rW, sx));
+        p.y = Math.max(0, Math.min(room.depth - rD,  sy));
+        drawCanvas();
+        return;
+      }
+
+      // Hover tracking
+      const hitId = hitTest(cx, cy);
+      if (hitId !== State.floorplan.hoveredId) {
+        State.floorplan.hoveredId = hitId;
+        drawCanvas();
+      }
+      if (hitId) {
+        const p = State.floorplan.placements.find(pl => pl.id === hitId);
+        const f = State.furniture.find(i => i.id === p.furnitureId);
+        const { x, y, r } = trashIconHitArea(p, f);
+        canvas.style.cursor = Math.hypot(cx - x, cy - y) <= r ? 'pointer' : 'grab';
+      } else {
+        canvas.style.cursor = 'default';
+      }
     });
 
     canvas.addEventListener('mouseup', () => {
@@ -1369,38 +1375,13 @@
     });
 
     canvas.addEventListener('mouseleave', () => {
-      State.floorplan.dragging = null;
+      State.floorplan.dragging  = null;
+      State.floorplan.hoveredId = null;
       canvas.style.cursor = 'default';
+      drawCanvas();
     });
 
     // Floor plan image upload
-    el('fp-upload-image').addEventListener('click', () => el('fp-image-input').click());
-
-    el('fp-image-input').addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file || !State.floorplan.roomId) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const dataUrl = ev.target.result;
-        setRoomImage(State.floorplan.roomId, dataUrl);
-        loadRoomImage(State.floorplan.roomId);
-      };
-      reader.readAsDataURL(file);
-      e.target.value = '';
-    });
-
-    el('fp-image-opacity').addEventListener('input', e => {
-      State.floorplan.imageOpacity = Number(e.target.value) / 100;
-      drawCanvas();
-    });
-
-    el('fp-remove-image').addEventListener('click', () => {
-      if (!State.floorplan.roomId) return;
-      clearRoomImage(State.floorplan.roomId);
-      State.floorplan.image = null;
-      updateImageBar(false);
-      drawCanvas();
-    });
   }
 
   // ─── Utility ────────────────────────────────────────────────────────────────

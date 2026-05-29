@@ -588,31 +588,6 @@ body {
   color: var(--color-danger);
 }
 
-.fp-image-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-
-.fp-image-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.fp-opacity-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.fp-opacity-slider {
-  width: 80px;
-  cursor: pointer;
-}
 
 .floorplan-sidebar {
   width: 190px;
